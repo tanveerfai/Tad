@@ -31,7 +31,7 @@ def _get_key() -> str:
 
 def generate_image(
     prompt: str,
-    model_name: str = "gemini-2.0-pro-exp",
+    model_name: str = "nano-banana-pro-preview",
     output_path: str | None = None,
 ) -> Image.Image | None:
     """Generate an image from a text prompt using Nano Banana Pro (Gemini REST API).
@@ -73,7 +73,7 @@ def generate_image(
 def edit_image(
     image_path: str,
     edit_prompt: str,
-    model_name: str = "gemini-2.0-pro-exp",
+    model_name: str = "nano-banana-pro-preview",
     output_path: str | None = None,
 ) -> Image.Image | None:
     """Edit an existing image using Nano Banana Pro (Gemini REST API).
