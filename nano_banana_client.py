@@ -31,10 +31,10 @@ def _get_key() -> str:
 
 def generate_image(
     prompt: str,
-    model_name: str = "gemini-2.0-flash-exp",
+    model_name: str = "gemini-2.0-pro-exp",
     output_path: str | None = None,
 ) -> Image.Image | None:
-    """Generate an image from a text prompt using Nano Banana (Gemini REST API).
+    """Generate an image from a text prompt using Nano Banana Pro (Gemini REST API).
 
     Args:
         prompt: Text description of the image to generate.
@@ -73,10 +73,10 @@ def generate_image(
 def edit_image(
     image_path: str,
     edit_prompt: str,
-    model_name: str = "gemini-2.0-flash-exp",
+    model_name: str = "gemini-2.0-pro-exp",
     output_path: str | None = None,
 ) -> Image.Image | None:
-    """Edit an existing image using Nano Banana (Gemini REST API).
+    """Edit an existing image using Nano Banana Pro (Gemini REST API).
 
     Args:
         image_path: Path to the source image.
