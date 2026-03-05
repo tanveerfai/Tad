@@ -1,21 +1,32 @@
-"""Nano Banana AI client for image generation using Google Gemini."""
+"""Nano Banana AI client for image generation using Google Gemini REST API."""
 
 import base64
+import io
 import os
 from pathlib import Path
 
-import google.generativeai as genai
+import httpx
 from PIL import Image
+
+_api_key: str | None = None
+
+API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 def configure(api_key: str | None = None):
     """Configure the Gemini API with the given key."""
-    key = api_key or os.getenv("GOOGLE_API_KEY")
-    if not key:
+    global _api_key
+    _api_key = api_key or os.getenv("GOOGLE_API_KEY")
+    if not _api_key:
         raise ValueError(
             "Google API key is required. Set GOOGLE_API_KEY env var or pass api_key."
         )
-    genai.configure(api_key=key)
+
+
+def _get_key() -> str:
+    if not _api_key:
+        raise ValueError("Call configure() first.")
+    return _api_key
 
 
 def generate_image(
@@ -23,7 +34,7 @@ def generate_image(
     model_name: str = "gemini-2.0-flash-exp",
     output_path: str | None = None,
 ) -> Image.Image | None:
-    """Generate an image from a text prompt using Nano Banana (Gemini).
+    """Generate an image from a text prompt using Nano Banana (Gemini REST API).
 
     Args:
         prompt: Text description of the image to generate.
@@ -33,21 +44,29 @@ def generate_image(
     Returns:
         PIL Image object if successful, None otherwise.
     """
-    model = genai.GenerativeModel(model_name)
-    response = model.generate_content(prompt)
+    url = f"{API_BASE}/{model_name}:generateContent?key={_get_key()}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+    }
 
-    for part in response.candidates[0].content.parts:
-        if hasattr(part, "inline_data") and part.inline_data:
-            image_data = base64.b64decode(part.inline_data.data)
+    resp = httpx.post(url, json=payload, timeout=60)
+    resp.raise_for_status()
+    data = resp.json()
+
+    for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+        if "inlineData" in part:
+            image_bytes = base64.b64decode(part["inlineData"]["data"])
             if output_path:
                 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
                 with open(output_path, "wb") as f:
-                    f.write(image_data)
-            import io
-            return Image.open(io.BytesIO(image_data))
+                    f.write(image_bytes)
+            return Image.open(io.BytesIO(image_bytes))
 
-    # If no inline image data, return the text response
-    print(f"No image generated. Model response: {response.text}")
+    # No image in response — print text parts
+    for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+        if "text" in part:
+            print(f"No image generated. Model response: {part['text']}")
     return None
 
 
@@ -57,7 +76,7 @@ def edit_image(
     model_name: str = "gemini-2.0-flash-exp",
     output_path: str | None = None,
 ) -> Image.Image | None:
-    """Edit an existing image using Nano Banana (Gemini).
+    """Edit an existing image using Nano Banana (Gemini REST API).
 
     Args:
         image_path: Path to the source image.
@@ -68,19 +87,39 @@ def edit_image(
     Returns:
         PIL Image object if successful, None otherwise.
     """
-    source_image = Image.open(image_path)
-    model = genai.GenerativeModel(model_name)
-    response = model.generate_content([edit_prompt, source_image])
+    with open(image_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
 
-    for part in response.candidates[0].content.parts:
-        if hasattr(part, "inline_data") and part.inline_data:
-            image_data = base64.b64decode(part.inline_data.data)
+    import mimetypes
+    mime = mimetypes.guess_type(image_path)[0] or "image/png"
+
+    url = f"{API_BASE}/{model_name}:generateContent?key={_get_key()}"
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": edit_prompt},
+                    {"inlineData": {"mimeType": mime, "data": image_data}},
+                ]
+            }
+        ],
+        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+    }
+
+    resp = httpx.post(url, json=payload, timeout=60)
+    resp.raise_for_status()
+    data = resp.json()
+
+    for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+        if "inlineData" in part:
+            image_bytes = base64.b64decode(part["inlineData"]["data"])
             if output_path:
                 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
                 with open(output_path, "wb") as f:
-                    f.write(image_data)
-            import io
-            return Image.open(io.BytesIO(image_data))
+                    f.write(image_bytes)
+            return Image.open(io.BytesIO(image_bytes))
 
-    print(f"No image generated. Model response: {response.text}")
+    for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+        if "text" in part:
+            print(f"No image generated. Model response: {part['text']}")
     return None
